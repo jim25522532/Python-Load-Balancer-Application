@@ -8,7 +8,13 @@ University of Colorado Boulder
 
 Note: llb.py and pranit13extra.py are applications present in '~/.local/lib/python2.7/site-packages/ryu/app' 
 
-# 無狀態負載平衡演算法 
+
+# 無狀態負載平衡演算法-使用方法
+
+
+## Load Balancer架構圖
+![Alt text](/img/Arc_llb.png) 
+![Alt text](/img/Work_Sequence.png) 
 
 ## 程式使用方法
 1. Step1: 使用Mininet模擬Single Switch網路拓樸 
@@ -38,7 +44,7 @@ curl 10.0.0.100
 ```
 ## Load Balancer架構圖
 
-# 有狀態的負載平衡演算法
+# 有狀態的負載平衡演算法-使用方法
 ## 程式使用方法
 1. Step1: 使用Mininet模擬Single Switch網路拓樸 
 ```
@@ -53,7 +59,6 @@ ryu run pranit13extra.py
 3. 來自h4或h5的request會被Load balancer把流量導引到h1 Web Server , 來自h6 client的 requet　Load balancer將流量導引到 h2 web server ,
 來自h7 client的request Load balancer將流量導引到h3 web server. 
 
-## Load Balancer架構圖
 
 
 # 關鍵程式碼
@@ -108,10 +113,10 @@ def function_for_arp_reply(self, dst_ip, dst_mac):                              
 
         arp_opcode = 2                          #ARP opcode is 2 for ARP reply
         hardware_type = 1                       #1 indicates Ethernet ie 10Mb
-        arp_protocol = 2048                       #2048 means IPv4 packet
+        arp_protocol = 2048                     #2048 means IPv4 packet
         ether_protocol = 2054                   #2054 indicates ARP protocol
-        len_of_mac = 6                  #Indicates length of MAC in bytes
-        len_of_ip = 4                   #Indicates length of IP in bytes
+        len_of_mac = 6                          #Indicates length of MAC in bytes
+        len_of_ip = 4                           #Indicates length of IP in bytes
 
         pkt = packet.Packet()
         ether_frame = ethernet.ethernet(dst_mac, src_mac, ether_protocol)               #Dealing with only layer 2
@@ -149,12 +154,12 @@ def function_for_arp_reply(self, dst_ip, dst_mac):                              
         if eth.ethertype == ether_types.ETH_TYPE_LLDP:
             # ignore lldp packet
             return
-
-        if eth.ethertype == ether.ETH_TYPE_ARP:                                   #If the ethernet frame has eth type as 2054 indicating as ARP packet..  
+        # 如果是ARP封包則進入處理
+        if eth.ethertype == ether.ETH_TYPE_ARP:                                    
             arp_header = pkt.get_protocols(arp.arp)[0]
-            
+            #如果ARP的封包目標IP是Load Balancer 且是ARP封包
             if arp_header.dst_ip == self.virtual_lb_ip and arp_header.opcode == arp.ARP_REQUEST:                 #..and if the destination is the virtual IP of the load balancer and Opcode = 1 indicating ARP Request
-
+　　　　　　　　　#返回ARP封包
                 reply_packet=self.function_for_arp_reply(arp_header.src_ip, arp_header.src_mac)    #Call the function that would build a packet for ARP reply passing source MAC and source IP
                 actions = [parser.OFPActionOutput(in_port)]
                 packet_out = parser.OFPPacketOut(datapath=datapath, in_port=ofproto.OFPP_ANY, data=reply_packet.data, actions=actions, buffer_id=0xffffffff)    
@@ -163,6 +168,7 @@ def function_for_arp_reply(self, dst_ip, dst_mac):                              
             return
         ip_header=[]
         tcp_header=[]
+        #　當pkt內有 IP層協定,將　ip header與TCP header取出
         if len(pkt.get_protocols(ipv4.ipv4))>0:
         	ip_header = pkt.get_protocols(ipv4.ipv4)[0]
         
@@ -171,6 +177,7 @@ def function_for_arp_reply(self, dst_ip, dst_mac):                              
     
        
         #print("TCP_Header", tcp_header)
+        # Round Robin 演算法　每次輪流服務器當接收端(選擇伺服器)
         count = self.counter % 3                            #Round robin fashion setup
         server_ip_selected = self.serverlist[count]['ip']
         server_mac_selected = self.serverlist[count]['mac']
@@ -180,7 +187,7 @@ def function_for_arp_reply(self, dst_ip, dst_mac):                              
         print("The selected server is ===> ", server_ip_selected)
 
         
-        #Route to server
+        #將封包錄由道Server
         if len(ip_header)>=1:
         	match = parser.OFPMatch(in_port=in_port, eth_type=eth.ethertype, eth_src=eth.src, eth_dst=eth.dst, ip_proto=ip_header.proto, ipv4_src=ip_header.src, ipv4_dst=ip_header.dst, tcp_src=tcp_header.src_port, tcp_dst=tcp_header.dst_port)
         	actions = [parser.OFPActionSetField(ipv4_src=self.virtual_lb_ip), parser.OFPActionSetField(eth_src=self.virtual_lb_mac), parser.OFPActionSetField(eth_dst=server_mac_selected), parser.OFPActionSetField(ipv4_dst=server_ip_selected), parser.OFPActionOutput(server_outport_selected)]
@@ -191,7 +198,7 @@ def function_for_arp_reply(self, dst_ip, dst_mac):                              
         	print("<========Packet from client: "+str(ip_header.src)+". Sent to server: "+str(server_ip_selected)+", MAC: "+str(server_mac_selected)+" and on switch port: "+str(server_outport_selected)+"========>")  
 
 
-        #Reverse route from server
+        #返回封包給Client
         	match = parser.OFPMatch(in_port=server_outport_selected, eth_type=eth.ethertype, eth_src=server_mac_selected, eth_dst=self.virtual_lb_mac, ip_proto=ip_header.proto, ipv4_src=server_ip_selected, ipv4_dst=self.virtual_lb_ip, tcp_src=tcp_header.dst_port, tcp_dst=tcp_header.src_port)
         	actions = [parser.OFPActionSetField(eth_src=self.virtual_lb_mac), parser.OFPActionSetField(ipv4_src=self.virtual_lb_ip), parser.OFPActionSetField(ipv4_dst=ip_header.src), parser.OFPActionSetField(eth_dst=eth.src), parser.OFPActionOutput(in_port)]
         	inst2 = [parser.OFPInstructionActions(ofproto.OFPIT_APPLY_ACTIONS, actions)]
@@ -201,4 +208,52 @@ def function_for_arp_reply(self, dst_ip, dst_mac):                              
         	print("<++++++++Reply sent from server: "+str(server_ip_selected)+", MAC: "+str(server_mac_selected)+". Via load balancer: "+str(self.virtual_lb_ip)+". To client: "+str(ip_header.src)+"++++++++>")
 
 ```
-# 執行結果
+## 有狀態負載平衡核心演算法
+``` python
+ #Route to server
+        match = parser.OFPMatch(in_port=in_port, eth_type=eth.ethertype, eth_src=eth.src, eth_dst=eth.dst, ip_proto=ip_header.proto, ipv4_src=ip_header.src, ipv4_dst=ip_header.dst, tcp_src=tcp_header.src_port, tcp_dst=tcp_header.dst_port)
+
+        if ip_header.src == "10.0.0.4" or ip_header.src == "10.0.0.5":
+            server_mac_selected = self.serverlist[0]['mac']
+            server_ip_selected = self.serverlist[0]['ip']
+            server_outport_selected = int(self.serverlist [0]['outport'])
+        elif ip_header.src == "10.0.0.6":
+            server_mac_selected = self.serverlist[1]['mac']
+            server_ip_selected = self.serverlist[1]['ip']
+            server_outport_selected = int(self.serverlist [1]['outport'])
+        else:
+            server_mac_selected = self.serverlist[2]['mac']
+            server_ip_selected = self.serverlist[2]['ip']
+            server_outport_selected = int(self.serverlist [2]['outport'])
+
+        actions = [parser.OFPActionSetField(ipv4_src=self.virtual_lb_ip), parser.OFPActionSetField(eth_src=self.virtual_lb_mac), parser.OFPActionSetField(eth_dst=server_mac_selected), parser.OFPActionSetField(ipv4_dst=server_ip_selected), parser.OFPActionOutput(server_outport_selected)]
+        inst = [parser.OFPInstructionActions(ofproto.OFPIT_APPLY_ACTIONS, actions)]
+        cookie = random.randint(0, 0xffffffffffffffff)
+        flow_mod = parser.OFPFlowMod(datapath=datapath, match=match, idle_timeout=7, instructions=inst, buffer_id = msg.buffer_id, cookie=cookie)
+        datapath.send_msg(flow_mod)
+        print("<========Packet sent from Client :"+str(ip_header.src)+" to Server: "+str(server_ip_selected)+", MAC: "+str(server_mac_selected)+" and on switch port: "+str(server_outport_selected)+"========>")  
+
+
+        #Reverse route from server
+        match = parser.OFPMatch(in_port=server_outport_selected, eth_type=eth.ethertype, eth_src=server_mac_selected, eth_dst=self.virtual_lb_mac, ip_proto=ip_header.proto, ipv4_src=server_ip_selected, ipv4_dst=self.virtual_lb_ip, tcp_src=tcp_header.dst_port, tcp_dst=tcp_header.src_port)
+        actions = [parser.OFPActionSetField(eth_src=self.virtual_lb_mac), parser.OFPActionSetField(ipv4_src=self.virtual_lb_ip), parser.OFPActionSetField(ipv4_dst=ip_header.src), parser.OFPActionSetField(eth_dst=eth.src), parser.OFPActionOutput(in_port)]
+        inst2 = [parser.OFPInstructionActions(ofproto.OFPIT_APPLY_ACTIONS, actions)]
+        cookie = random.randint(0, 0xffffffffffffffff)
+        flow_mod2 = parser.OFPFlowMod(datapath=datapath, match=match, idle_timeout=7, instructions=inst2, cookie=cookie)
+        datapath.send_msg(flow_mod2)
+        print("<++++++++Reply sent from server having IP: "+str(server_ip_selected)+", MAC: "+str(server_mac_selected)+" to client:"+str(ip_header.src)+" via load balancer :"+str(self.virtual_lb_ip)+"++++++++>")
+```
+
+## 執行結果-無狀態負載平衡演算法 llb.py 
+![Alt text](/img/Execute_Stats.png) 
+
+## 執行結果-有狀態負載平衡演算法 pranit13extra.py 
+
+![Alt text](/img/States_work_stats.png) 
+
+## 有狀態　Load Balancer　架構圖
+
+![Alt text](/img/stats_arc.png) 
+![Alt text](/img/stats.png) 
+
+

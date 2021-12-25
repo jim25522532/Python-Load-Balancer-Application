@@ -135,42 +135,6 @@ class SimpleSwitch13(app_manager.RyuApp):
                 datapath.send_msg(packet_out)
                 print("Debug: Sent the packet_out.")
 
-            """else:                                                                                #Not needed as we ARP only for the load balancer MAC address. This is needed when we ARP for other devices MAC 
-                
-                dst = eth.dst
-                src = eth.src
-                self.mac_to_port.setdefault(dpid, {})
-
-                self.logger.info("packet in %s %s %s %s", dpid, src, dst, in_port)
-
-                # learn a mac address to avoid FLOOD next time.
-                self.mac_to_port[dpid][src] = in_port
-
-                if dst in self.mac_to_port[dpid]:
-                    out_port = self.mac_to_port[dpid][dst]
-                else:
-                    out_port = ofproto.OFPP_FLOOD
-
-                actions = [parser.OFPActionOutput(out_port)]
-
-                # install a flow to avoid packet_in next time
-                if out_port != ofproto.OFPP_FLOOD:
-                    match = parser.OFPMatch(in_port=in_port, eth_dst=dst)
-
-                    # verify if we have a valid buffer_id, if yes avoid to send both
-                    # flow_mod & packet_out
-                    if msg.buffer_id != ofproto.OFP_NO_BUFFER:
-                        self.add_flow(datapath, 1, match, actions, msg.buffer_id)
-                        return
-                    else:
-                        self.add_flow(datapath, 1, match, actions)
-                data = None
-                if msg.buffer_id == ofproto.OFP_NO_BUFFER:
-                    data = msg.data
-
-                out = parser.OFPPacketOut(datapath=datapath, buffer_id=msg.buffer_id,
-                                  in_port=in_port, actions=actions, data=data)
-                datapath.send_msg(out)"""
             return
 
         
@@ -178,14 +142,6 @@ class SimpleSwitch13(app_manager.RyuApp):
         #print("IP_Header", ip_header)
         tcp_header = pkt.get_protocols(tcp.tcp)[0]
         #print("TCP_Header", tcp_header)
-
-        """count = self.counter % 3                            
-        server_ip_selected = self.serverlist[count]['ip']
-        server_mac_selected = self.serverlist[count]['mac']
-        server_outport_selected = self.serverlist[count]['outport']
-        server_outport_selected = int(server_outport_selected)
-        self.counter = self.counter + 1
-        print("The selected server is", server_ip_selected)"""            
 
         
         #Route to server
